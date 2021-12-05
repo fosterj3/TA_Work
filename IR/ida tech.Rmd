@@ -1,0 +1,271 @@
+---
+title: "University of Washington Graduation Rate"
+author: "James Lamar Foster, Ph.D. Candidate"
+date: "August 20, 2021"
+output: html_document
+---
+
+```{r set_knitr_chunk_options, echo=FALSE, message=FALSE}
+#set global output chunk options
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, collapse = F, highlight = F, results = "asis")
+```
+
+```{r}
+# Packages for cleaning, wrangling, and visualizing
+library(tidyverse)
+library(janitor)
+library(scales)
+```
+
+```{r}
+# Read in the data 
+ipeds_two <- read_csv("ipeds_final.csv")
+ipeds_three <- read_csv("ipeds_three.csv")
+```
+
+```{r, eval=FALSE}
+# Examine the data 
+head(ipeds_two)
+```
+
+```{r}
+#Clean variable names 
+ipeds_two <- clean_names(ipeds_two)
+
+#Rename Variables names 
+
+ipeds_rename <- ipeds_two %>% 
+  rename(
+    total_enrollment = 3,
+    total_bachelors_4 = 4, 
+    total_bachelors_6 = 5,
+    race_unknown_men = 6, 
+    race_unknown_women = 7, 
+    Male = 8, 
+    Female = 9, 
+    hispanic_men = 10, 
+    hispanic_women = 11, 
+    aian_men = 12, 
+    aian_women = 13, 
+    asian_men = 14, 
+    asian_women = 15, 
+    black_men = 16, 
+    black_women = 17, 
+    nhpi_men = 18, 
+    nhpi_women = 19, 
+    white_men = 20, 
+    white_women = 21, 
+    multi_men = 22, 
+    multi_women = 23) %>% 
+  select(-24)
+```
+
+```{r}
+# Ipeds three cleaning 
+ipeds_three_clean <- ipeds_three %>% 
+  rename(
+    school = instnm, 
+    overall_grad_rate = 2, 
+    men_overall_grad_rate = 3, 
+    women_overall_grad_rate = 4, 
+    grad_four = 5, 
+    grad_six = 6, 
+    men_grad_six = 7, 
+    women_grad_six = 8
+  ) %>% 
+  select(-9)
+
+```
+
+```{r}
+#Prepare data for visualization Graduate rate 
+ipeds_grad_overall <- ipeds_rename %>% 
+  select(2:5)
+
+ipeds_grad_overall <- ipeds_grad_overall %>% 
+  mutate(graduation_four_rate = round(total_bachelors_4/total_enrollment,2),
+         graduation_six_rate = round(total_bachelors_6/total_enrollment,2),
+         perc_four_rate = paste0(sprintf("%4.1f", total_bachelors_4 / total_enrollment * 100), "%"),
+         perc_six_rate = paste0(sprintf("%4.1f", total_bachelors_6 / total_enrollment * 100), "%")) 
+```
+
+
+```{r}
+# Make values with percent symbols
+ipeds_three_viz <- ipeds_three_clean %>% 
+  mutate(perc_overall_grad_rate = paste0(sprintf("%4.1f", overall_grad_rate), "%"),
+         perc_men_overall_grad_rate = paste0(sprintf("%4.1f", men_overall_grad_rate), "%"),
+         perc_women_overall_grad_rate = paste0(sprintf("%4.1f", women_overall_grad_rate), "%"),
+         perc_grad_four = paste0(sprintf("%4.1f", grad_four), "%"),
+         perc_grad_six = paste0(sprintf("%4.1f", grad_six), "%"),
+         perc_men_grad_six = paste0(sprintf("%4.1f", men_grad_six), "%"),
+         perc_women_grad_six = paste0(sprintf("%4.1f", women_grad_six), "%")) 
+```
+
+# **Summary of Findings**
+
+*University of Washington's Graduate Rate*
+
+- 4-year graduation rate is 66%
+- 6-year graduation rate is 84%
+- Women overall graduation rate is 87%
+- Men overall graduation rate is 81%
+
+This project uses data from the [Integrated Postsecondary Education Data System (IPEDS)](https://nces.ed.gov/ipeds/) to examine how the University of Washington - Seattle compares to similar institutions in the West regarding graduation. 
+
+Four and six-year graduation rates were examined for class of 2019. This exploratory analysis discovered that the University of Washington's 4-year and 6-year graduation rate ranks 5th among the 13 institutions in the Bureau of Economic Analysis (BEA) Far West region.
+
+When the graduation rate was disaggregated by sex, the University of Washington's graduation rate decreased to sixth place for men. However, the University of Washington remained in 5th place for women, although the graduation percentage for males is lower than females' graduation percentage.
+
+Analysts must do further disaggregation and analysis to understand the nuances of the University of Washington's graduation rate. For example, IPEDS provides Pell and race/ethnicity data, which may lend itself well to a deeper analysis. This may deepen our understanding of which groups of people need more support to help them graduate within 4 or 6 years.
+
+```{r}
+#Visualize 4- year Graduate rate 
+# correct 
+ipeds_three_viz %>% 
+  mutate(highlight = ifelse(school == "University of Washington-Seattle Campus", T, F)) %>% 
+  ggplot(aes(x = reorder(school, grad_four), y = grad_four)) + 
+  geom_col(aes(fill = highlight)) + 
+  scale_fill_manual(values = c("grey60", "#4b2e83")) +
+  coord_flip() +
+  labs(title = "4-year Graduation Rate",
+       subtitle = "For Far West Public Research Institutions",
+       x = "",
+       y = "",
+       fill= "Institution Name",
+       caption = "Data provided by Integrated Postsecondary Education Data System") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  geom_text(aes(label = perc_grad_four), hjust = 1, nudge_x = .1, color = "white", fontface = "bold" ) +
+  scale_y_continuous(labels = scales::percent)
+```
+
+```{r}
+#Visualize 6- year Graduate rate 
+# correct 
+ipeds_three_viz %>% 
+  mutate(highlight = ifelse(school == "University of Washington-Seattle Campus", T, F)) %>% 
+  ggplot(aes(x = reorder(school, grad_six), y = grad_six)) + 
+  geom_col(aes(fill = highlight)) + 
+  scale_fill_manual(values = c("grey60", "#4b2e83")) +
+  coord_flip() +
+  labs(title = "6-year Graduation Rate",
+       subtitle = "For Far West Public Research Institutions",
+       x = "",
+       y = "",
+       fill= "Institution Name",
+       caption = "Data provided by Integrated Postsecondary Education Data System") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  geom_text(aes(label = perc_grad_six), hjust = 1, nudge_x = .1, color = "white", fontface = "bold" ) +
+  scale_y_continuous(labels = scales::percent)
+```
+
+```{r}
+#Visualize Men Overall Graduation Rate 
+# correct 
+ipeds_three_viz %>% 
+  mutate(highlight = ifelse(school == "University of Washington-Seattle Campus", T, F)) %>% 
+  ggplot(aes(x = reorder(school, men_overall_grad_rate), y = men_overall_grad_rate)) + 
+  geom_col(aes(fill = highlight)) + 
+  scale_fill_manual(values = c("grey60", "#4b2e83")) +
+  coord_flip() +
+  labs(title = "Overall Graduation Rate for Men",
+       subtitle = "For Far West Public Research Institutions",
+       x = "",
+       y = "",
+       fill= "Institution Name",
+       caption = "Data provided by Integrated Postsecondary Education Data System") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  geom_text(aes(label = perc_men_overall_grad_rate), hjust = 1, nudge_x = .1, color = "white", fontface = "bold" ) +
+  scale_y_continuous(labels = scales::percent)
+```
+
+```{r}
+#Visualize Women Overall Graduation Rate 
+# correct 
+ipeds_three_viz %>% 
+  mutate(highlight = ifelse(school == "University of Washington-Seattle Campus", T, F)) %>% 
+  ggplot(aes(x = reorder(school, women_overall_grad_rate), y = women_overall_grad_rate)) + 
+  geom_col(aes(fill = highlight)) + 
+  scale_fill_manual(values = c("grey60", "#4b2e83")) +
+  coord_flip() +
+  labs(title = "Overall Graduation Rate for Women",
+       subtitle = "For Far West Public Research Institutions",
+       x = "",
+       y = "",
+       fill= "Institution Name",
+       caption = "Data provided by Integrated Postsecondary Education Data System") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  geom_text(aes(label = perc_women_overall_grad_rate), hjust = 1, nudge_x = .1, color = "white", fontface = "bold" ) +
+  scale_y_continuous(labels = scales::percent)
+```
+```{r}
+#Prepare data for facet wrap 
+ipeds_three_viz_facet <- ipeds_three_viz %>% 
+  pivot_longer(men_overall_grad_rate:women_overall_grad_rate, names_to ="sex", values_to = "overal_grad_sex")
+```
+
+```{r}
+#Clean data for facet 
+ipeds_three_viz_facet <- ipeds_three_viz_facet %>% 
+  mutate(sex = str_extract(sex, "[^_]*"),
+         sex = str_to_sentence(sex),
+         perc_overal_grad_sex = paste0(sprintf("%4.1f", overal_grad_sex), "%")) 
+```
+
+```{r}
+#Overall Grad Rate by Sex Facet Wrap 
+ipeds_three_viz_facet %>% 
+  mutate(highlight = ifelse(school == "University of Washington-Seattle Campus", T, F)) %>% 
+  ggplot(aes(x = reorder(school, overal_grad_sex), y = overal_grad_sex)) + 
+  geom_col(aes(fill = highlight)) + 
+  scale_fill_manual(values = c("grey60", "#4b2e83")) +
+  coord_flip() +
+  labs(title = "Graduation Rate",
+       subtitle = "For Far West Public Research Institutions",
+       x = "",
+       y = "",
+       fill= "Institution Name",
+       caption = "Data provided by Integrated Postsecondary Education Data System") +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none",
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  geom_text(aes(label = perc_overal_grad_sex), hjust = 1, nudge_x = .1, color = "white", fontface = "bold" ) +
+  scale_y_continuous(labels = scales::percent) +
+  facet_wrap(~sex)
+```
+
+
+
+
+
+
+
+
