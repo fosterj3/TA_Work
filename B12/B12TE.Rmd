@@ -1,0 +1,188 @@
+---
+title: "Beyond 12 College Graduation"
+author: "James Lamar Foster"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, messages = FALSE)
+
+#clear memory
+rm(list = ls())
+#penalize excessive significant figures
+options(digits = 3)
+#preventing scientific notation
+options(scipen = 10)
+```
+
+```{r, warning=FALSE, message = FALSE}
+#packages used
+if(!require(readr)){
+    install.packages("readr", dependencies = TRUE)
+    library(readr)
+}
+if(!require(ggplot2)){
+    install.packages("ggplot2", dependencies = TRUE)
+    library(ggplot2)
+}
+if(!require(dplyr)){
+    install.packages("dplyr", dependencies = TRUE)
+    library(dplyr)
+}
+if(!require(tidyr)){
+    install.packages("tidyr", dependencies = TRUE)
+    library(tidyr)
+}
+if(!require(janitor)){
+    install.packages("janitor", dependencies = TRUE)
+    library(janitor)
+}
+if(!require(lubridate)){
+    install.packages("lubridate", dependencies = TRUE)
+    library(lubridate)
+}
+if(!require(stringr)){
+    install.packages("stringr", dependencies = TRUE)
+    library(stringr)
+}
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Read in the data 
+
+cip_df <- read_csv("/Users/Lamar/Desktop/DS Projects/TA_Work/B12/CIP_to_majors.csv")
+
+ce_df <- read_csv("/Users/Lamar/Desktop/DS Projects/TA_Work/B12/college_enrollment.csv")
+
+region <- read_csv("https://raw.githubusercontent.com/cphalpert/census-regions/master/us%20census%20bureau%20regions%20and%20divisions.csv")
+```
+
+```{r, eval= F}
+# Take a quick look at the data 
+str(ce_df)
+
+#I notice that some variables need to be recoded, e.g. the date variables 
+```
+
+```{r}
+# Some Data Cleaning 
+
+##Clean the names of the variables using the janitor package 
+ce_df_clean <- clean_names(ce_df) 
+
+##Convert character dates to date class
+ce_df_clean$enrollment_begin <- ymd(ce_df_clean$enrollment_begin)
+ce_df_clean$enrollment_end <- ymd(ce_df_clean$enrollment_end)
+ce_df_clean$high_school_graduation_date <- ymd(ce_df_clean$high_school_graduation_date)
+ce_df_clean$graduation_date <- ymd(ce_df_clean$graduation_date)
+
+
+##Convert Categorical Variables to Factors 
+ce_df_clean$student_id <- factor(ce_df_clean$student_id)
+ce_df_clean$enrollment_status <- factor(ce_df_clean$enrollment_status)
+ce_df_clean$college_state <- factor(ce_df_clean$college_state)
+```
+
+```{r, warning= FALSE}
+# Create analytic data frame by filtering for 4-year institutions, only undergrad degrees, and determine time it took for students to graduate 
+ce_df_grad <- ce_df_clean %>% 
+    filter(x2_year_4_year == 4) %>% # filter for only 4-year institutions
+    fill(graduation_date, .direction = "up") %>% 
+    mutate(grad_time = graduation_date - enrollment_begin) %>%
+    group_by(student_id) %>% 
+    mutate(year_id = row_number()) %>%
+    mutate(longest_grad_time = max(grad_time, na.rm = T),
+           earliest_enrollment = min(enrollment_begin, na.rm = T)) %>% #determine graduation time in days
+    mutate(graduation_time_year = longest_grad_time/365.25) %>% #determine graduation time in years
+    filter(!is.na(degree_title)) %>% # filter for students who received their degree 
+    filter(str_detect(degree_title, "^B")) %>% # filter for undergrad degrees
+    select(-c(enrollment_begin, enrollment_end))
+```
+
+
+To determine the STEM CIP codes, I relied on the [Department of Homeland Security's](https://www.ice.gov/sites/default/files/documents/stem-list.pdf) designation for STEM Majors. Those majors included engineering (CIP code 14), biological sciences (CIP code 26), mathematics (CIP code 27), and physical sciences (CIP code 40).
+```{r}
+# Tidy the analytical dataframe and add new variables (e.g. transfer student, STEM Majors, double major, gap year, etc.)
+ce_df_al <- ce_df_grad %>% 
+    mutate(graduation_time_year = round(as.numeric(graduation_time_year),2)) %>% 
+    filter(graduation_time_year > 0) %>% 
+    mutate(transferred = if_else(college_sequence > 1, "yes", "no")) %>%
+    mutate(double_major = if_else(is.na(major_2), "no", "yes")) %>%
+    mutate(hs_to_college = earliest_enrollment - high_school_graduation_date) %>% 
+    mutate(gap_year = if_else(hs_to_college > 366, "yes", "no")) %>% 
+    distinct(student_id, .keep_all = TRUE) %>% 
+    mutate(stem_major = 
+               case_when(
+                   str_detect(major_1_cip_code, "^14") ~ "yes",
+                   str_detect(major_1_cip_code, "^26") ~ "yes",
+                   str_detect(major_1_cip_code, "^27") ~ "yes",
+                   str_detect(major_1_cip_code, "^40") ~ "yes",
+                   str_detect(major_1, "ENGINEERING") ~ "yes",
+                   str_detect(major_1, "MATHEMATICS") ~ "yes",
+                   TRUE ~ "no"))
+```
+
+```{r}
+#Review Analytical Dataset. Keep variables of interest and edit necessary variables (e.g. categorical variables to factors)
+ce_df_slim <- ce_df_al %>% 
+    select(-c(x2_year_4_year, 
+              major_1_cip_code, 
+              major_2_cip_code, 
+              year_id, 
+              hs_to_college, 
+              high_school_graduation_date,
+              grad_time,
+              longest_grad_time,
+              enrollment_status)) %>% 
+    mutate(
+        transferred = as.factor(transferred),
+        double_major = as.factor(double_major),
+        gap_year = as.factor(gap_year),
+        stem_major = as.factor(stem_major),
+        public_private = as.factor(public_private),
+        student_id = as.character(student_id)
+    )
+```
+
+```{r}
+ce_df_final <- merge(ce_df_slim, region) %>%
+    filter(college_state == `State Code`) %>% 
+    distinct(student_id, .keep_all = TRUE) %>% 
+    clean_names() %>% 
+    select(-state_code) %>% 
+    mutate(region = as.factor(region),
+           division = as.factor(division))
+```
+
+
+Descriptive Statistics
+```{r}
+summary(ce_df_final$transferred)
+summary(ce_df_final$graduation_time_year)
+```
+
+```{r}
+ggplot(ce_df_final, aes(x = stem_major, y= graduation_time_year)) + geom_boxplot(outlier.colour = "red", outlier.shape = 8) + stat_summary(fun = mean, geom = "point", shape = 23, fill = "blue") + facet_wrap(~public_private) + theme_classic() + labs(y = "Years to Graduate", x = "STEM Major", title = "Boxplot of Graduation Time for STEM Majors", subtitle = "Public and Private Higher Education Institutions in the US")
+
+```
+
+```{r}
+ce_df_final %>% 
+    group_by(region, public_private, stem_major) %>% 
+    summarise(mean_grad_time = mean(graduation_time_year)) %>% 
+    ggplot(aes(x = reorder(region, -mean_grad_time), y = mean_grad_time, fill = public_private)) + 
+    geom_col(position = "dodge") + facet_wrap(~stem_major) + scale_fill_manual(values=c("#4b2e83", "#85754d")) + theme_classic() + labs(title = "Average Years to Graduate for STEM Majors attending College", subtitle = "no= Not a STEM Major, yes = STEM Major", x = "Region", y = "Average Years to Graduate", fill = "College Type")
+    
+```
+
+```{r}
+ce_df_final %>% 
+    group_by(division, public_private, stem_major) %>% 
+    summarise(mean_grad_time = mean(graduation_time_year)) %>% 
+    ggplot(aes(x = reorder(division, -mean_grad_time), y = mean_grad_time, fill = public_private)) + 
+    geom_col(position = "dodge") + facet_wrap(~stem_major) + scale_fill_manual(values=c("#4b2e83", "#85754d")) + theme_classic() + labs(title = "Average Years to Graduate for STEM Majors attending College", subtitle = "no= Not a STEM Major, yes = STEM Major", x = "Census Division", y = "Average Years to Graduate", fill = "College Type") + coord_flip()
+```
+
+
