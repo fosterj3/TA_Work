@@ -1,9 +1,12 @@
 ---
 title: "Beyond 12 College Graduation"
+subtitle: "Predicting the length of time it takes to graduate from college"
 author: "James Lamar Foster"
 output:
   html_document:
     df_print: paged
+    toc: true
+    toc_float: true
 ---
 
 ```{r setup, include=FALSE}
@@ -47,8 +50,25 @@ if(!require(stringr)){
     install.packages("stringr", dependencies = TRUE)
     library(stringr)
 }
+
+if(!require(tidymodels)){
+    install.packages("tidymodels", dependencies = TRUE)
+    library(tidymodels)
+}
+if(!require(recipes)){
+    install.packages("recipes", dependencies = TRUE)
+    library(recipes)
+}
+
+if(!require(baguette)){
+    install.packages("baguette", dependencies = TRUE)
+    library(baguette)
+}
 ```
 
+---
+
+# Loading the Data
 ```{r, warning=FALSE, message=FALSE}
 # Read in the data 
 
@@ -65,6 +85,10 @@ str(ce_df)
 
 #I notice that some variables need to be recoded, e.g. the date variables 
 ```
+
+---
+
+# Data Cleaning and Wrangling 
 
 ```{r}
 # Some Data Cleaning 
@@ -101,8 +125,8 @@ ce_df_grad <- ce_df_clean %>%
     select(-c(enrollment_begin, enrollment_end))
 ```
 
-
 To determine the STEM CIP codes, I relied on the [Department of Homeland Security's](https://www.ice.gov/sites/default/files/documents/stem-list.pdf) designation for STEM Majors. Those majors included engineering (CIP code 14), biological sciences (CIP code 26), mathematics (CIP code 27), and physical sciences (CIP code 40).
+
 ```{r}
 # Tidy the analytical dataframe and add new variables (e.g. transfer student, STEM Majors, double major, gap year, etc.)
 ce_df_al <- ce_df_grad %>% 
@@ -142,11 +166,11 @@ ce_df_slim <- ce_df_al %>%
         gap_year = as.factor(gap_year),
         stem_major = as.factor(stem_major),
         public_private = as.factor(public_private),
-        student_id = as.character(student_id)
-    )
+        student_id = as.character(student_id))
 ```
 
 ```{r}
+# Add Census region to the data frame
 ce_df_final <- merge(ce_df_slim, region) %>%
     filter(college_state == `State Code`) %>% 
     distinct(student_id, .keep_all = TRUE) %>% 
@@ -156,12 +180,40 @@ ce_df_final <- merge(ce_df_slim, region) %>%
            division = as.factor(division))
 ```
 
+---
 
-Descriptive Statistics
+# Descriptive Statistics and Visualizations 
+
+## Descriptive Statistics 
 ```{r}
-summary(ce_df_final$transferred)
+#Year it takes to Graduate from College
 summary(ce_df_final$graduation_time_year)
+
+#Region of Students
+summary(ce_df_final$region)
+
+#STEM Majors
+summary(ce_df_final$stem_major)
+
+# University Type
+ce_df_final %>% 
+  group_by(public_private) %>% 
+  count() %>% 
+  rename("University Type" = public_private,
+         "Number of Observation" = n)
+
+# Count of Transferred students 
+ce_df_final %>% 
+  na.omit() %>% 
+  group_by(public_private, transferred) %>% 
+  count() %>% 
+  rename("University Type" = public_private,
+         "Number of Observation" = n)
 ```
+
+## Visualizations 
+
+The visualization revealed that there are several outliers in the data. There is also a bit of missing data. After reviewing the missing data, it appeared that it was missing at random. Therefore, I will remove the missing data rather than do an imputation. Additionally, I will remove the outliers in the data simply to see how it affects the model.
 
 ```{r}
 ggplot(ce_df_final, aes(x = stem_major, y= graduation_time_year)) + geom_boxplot(outlier.colour = "red", outlier.shape = 8) + stat_summary(fun = mean, geom = "point", shape = 23, fill = "blue") + facet_wrap(~public_private) + theme_classic() + labs(y = "Years to Graduate", x = "STEM Major", title = "Boxplot of Graduation Time for STEM Majors", subtitle = "Public and Private Higher Education Institutions in the US")
@@ -184,5 +236,110 @@ ce_df_final %>%
     ggplot(aes(x = reorder(division, -mean_grad_time), y = mean_grad_time, fill = public_private)) + 
     geom_col(position = "dodge") + facet_wrap(~stem_major) + scale_fill_manual(values=c("#4b2e83", "#85754d")) + theme_classic() + labs(title = "Average Years to Graduate for STEM Majors attending College", subtitle = "no= Not a STEM Major, yes = STEM Major", x = "Census Division", y = "Average Years to Graduate", fill = "College Type") + coord_flip()
 ```
+
+```{r}
+#More wrangling to create different visualizations 
+ce_df_final %>% 
+  mutate(enrollment_year = year(earliest_enrollment),
+         enrollment_decade = 10*(enrollment_year %/% 10),
+         enrollment_decade = factor(enrollment_decade)) %>% 
+  ggplot(aes(enrollment_decade, graduation_time_year, color = enrollment_decade)) +
+  geom_boxplot() + theme_bw() + labs(x = "Enrollment Decade", y= "Years to Graduate") + theme(legend.position = "none")
+```
+
+---
+
+# Machine Learning Model
+
+In this section, I will build a model to predict the time it takes a student to receive an undergraduate degree in the US. In the data cleaning process, I converted categorical variables coded as characters to factors to be used more easily in the model. The model is determined by the research question, i.e., what the business or researcher wants to learn. In this case, the researcher/business wants to know how long it will take a student to graduate from college with their undergraduate degree. Furthermore, what variables influence a student's length of time to graduate. 
+
+The model's outcome is a continuous variable - duration to get BA. Therefore, the machine learning model will be a regression (instead of a classification model). I chose to use a bagged decision tree because it improves the predictive capability of a single tree (minimal variance and reduces overfitting). The first step in building the model is creating training and testing data frames. I will use the tidymodels package to split the data and build the model.
+
+```{r}
+#More changes to create model dataframe 
+ce_model_df <- ce_df_final %>% 
+  mutate(enrollment_year = year(earliest_enrollment),
+         enrollment_decade = 10*(enrollment_year %/% 10),
+         enrollment_decade = factor(enrollment_decade),
+         college_sequence = factor(college_sequence),
+         graduation_year = year(graduation_date)) %>%
+  select(-c(earliest_enrollment, degree_title, major_1, major_2, state, enrollment_year,graduation_date)) %>% 
+  na.omit()
+```
+
+```{r}
+#Remove outliers in data frame 
+boxplot(ce_model_df$graduation_time_year)$out
+outliers <- boxplot(ce_model_df$graduation_time_year, plot=FALSE)$out
+ce_model_df_final <- ce_model_df[-which(ce_model_df$graduation_time_year %in% outliers),]
+```
+
+```{r}
+#Split the data into a traning and testing dataset 
+set.seed(123)
+
+ce_split <- initial_split(ce_model_df_final, strata = graduation_time_year, prop = 3/5)
+ce_train <- training(ce_split)
+ce_test <- testing(ce_split)
+```
+
+```{r}
+#Preprocessing the data 
+ce_recipe <- recipe(graduation_time_year ~., data = ce_model_df_final) %>% 
+  update_role(student_id, college_name, college_state, new_role = "id") %>% 
+  step_other(graduation_year, threshold = 0.01) %>% 
+  step_dummy(all_nominal(), -has_role("id"))
+```
+
+```{r}
+#Using a bagging decision tree model aka bootstrap aggregation, which is an ensembling method 
+ce_wf <- workflow() %>% 
+  add_recipe(ce_recipe)
+
+tree_spec <- bag_tree() %>% 
+  set_engine("rpart", times = 25) %>% 
+  set_mode("regression")
+
+mars_spec <- bag_mars() %>% 
+  set_engine("earth", times = 25) %>% 
+  set_mode("regression")
+
+tree_rs <- ce_wf %>% 
+  add_model(tree_spec) %>% 
+  fit(ce_train)
+
+mars_rs <- ce_wf %>% 
+  add_model(mars_spec) %>% 
+  fit(ce_train)
+```
+
+According to the model, taking a gap year between high school and college, attending a private institution, and transferring more than three times affects the length of time it takes a student to graduate with an undergraduate degree from a US college/university.
+
+```{r}
+#Evaluate the models 
+test_rs <- ce_test %>% 
+  bind_cols(predict(tree_rs, ce_test)) %>% 
+  rename(.pred_tree = .pred) %>% 
+  bind_cols(predict(mars_rs, ce_test)) %>% 
+  rename(.pred_mars = .pred)
+```
+
+The MARS (Multivariate Adaptive Regression Splines) model is a little better than the tree model at predicting the amount of time it will take to graduate with an undergraduate degree from a US college/university. However, judging by the RMSE and RSquare, the model needs to be tuned. 
+
+## Validation Metrics 
+```{r}
+#Get metrics from the model 
+test_rs %>% metrics(graduation_time_year, .pred_tree)
+
+test_rs %>% metrics(graduation_time_year, .pred_mars)
+```
+
+
+
+
+
+
+
+
 
 
