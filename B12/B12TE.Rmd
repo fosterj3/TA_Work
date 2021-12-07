@@ -324,7 +324,7 @@ test_rs <- ce_test %>%
   rename(.pred_mars = .pred)
 ```
 
-The MARS (Multivariate Adaptive Regression Splines) model is a little better than the tree model at predicting the amount of time it will take to graduate with an undergraduate degree from a US college/university. However, judging by the RMSE and RSquare, the model needs to be tuned. 
+The MARS (Multivariate Adaptive Regression Splines) algorithm is a little better than the tree model at predicting the amount of time it will take to graduate with an undergraduate degree from a US college/university. However, judging by the RMSE and RSquare, the model needs to be tuned. 
 
 ## Validation Metrics 
 ```{r}
