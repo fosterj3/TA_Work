@@ -1,0 +1,368 @@
+---
+title: "People Analytics Project"
+author: "James Lamar Foster, Ph.C."
+subtitle: Answering Critical Human Resource Questions
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    theme: cosmo
+    toc_float: yes
+---
+
+# Key Takeaways 
+
+1. People who applied online tended to be better hires, as measured by attrition and sales
+2. Departments with the highest percentage of disengaged employees also have employees who have taken the fewest average vacation days
+3. Pay between new hires and current employees is not equitable when accounting for gender
+4. Women are less likely to be labeled high performers than men
+
+# Executive Summary
+
+This exercise aims to illustrate my ability to take raw data to address specific business questions related to people analytics and diversity, equity, and inclusion. I answer critical human resource (HR) questions, provide insights into recruitment and equity issues, and make recommendations using fabricated HR data. I manipulate, A visualization of, and perform statistical tests on HR data throughout this analysis. The questions driving this analysis are: 
+
+  1) Which recruiting source yields the best hires?
+  2) What is driving low employee engagement?
+  3) Are new employees earning more than current employees?
+  4) Are performance ratings being given fairly?
+  
+The fabricated HR data is helpful to answer the questions above. However, the data is limited in terms of its demographic data. For example, this data does not contain age, race/ethnicity, ability, or education information. I can also not answer other crucial questions focused on legal and regulatory issues or effective diversity practices. However, this analysis suggests that people who applied online produced the best hires in terms of attrition and sales measures. On the other hand, the search firm produced the worse hires as measured by attrition and sales. 
+
+Gallup defines engaged employees as involved in, enthusiastic about, and committed to their work and workplace. Gallup categorizes workers as "engaged" based on their responses to key workplace elements it has found predict important organizational performance outcomes. Employees in the sales department were more likely to report disengaging from work. Through careful analysis of the data, it was discovered that employees in the sales department took a significant amount of fewer vacation days, on average than the rest of the company. This is not to suggest not going on vacation causes disengagement; however, it may be beneficial to urge sales employees to use their vacation days. 
+
+According to attorney Karen Denney, pay equity means compensating employees the same when they perform similar job duties while accounting for other factors, such as their experience level, job performance, and tenure. As a result, it is essential to disaggregate data based on race, gender, age, and other social axes of difference to determine whether an organization is paying its employees equitably. This analysis showed pay between new hires and current employees is not equitable when accounting for gender. Hiring managers and other key stakeholders should implement policies and practices to address this issue. The analysis revealed there are other existing inequitable issues regarding gender. Women are less likely to be labeled high performers than men; this may exacerbate pay gaps since performance ratings can affect bonuses and promotions. An initiative should be undertaken to ensure performance ratings are given fairly.
+
+Based on this analysis, the executive team and directors should consider discontinuing to pay a search firm to help with recruitment. Costs can be reduced in this area since many of the "best" hires find the company online. Before new hires are onboarded, the hiring managers must review their compensation package to ensure new hires are getting paid equitably. Lastly, current employees must take advantage of their vacation days. Low engagement appears to be driven by departments whose employees take fewer vacation days. All work and no play make the employee disengaged. 
+
+
+### References: 
+
+[GalluP](https://news.gallup.com/poll/180404/gallup-daily-employee-engagement.aspx#:~:text=Gallup%20defines%20engaged%20employees%20as,predict%20important%20organizational%20performance%20outcomes.)
+
+
+[Pay Equity](https://www.shrm.org/hr-today/news/hr-magazine/spring2020/pages/importance-of-pay-equity.aspx)
+
+```{r, echo= FALSE}
+#clear memory
+rm(list = ls())
+#penalize excessive significant figures
+options(digits = 3)
+#preventing scientific notation
+options(scipen = 10)
+```
+
+```{r, warning=FALSE, message=FALSE}
+#packages used in this analysis will be installed if not already
+
+if(!require(readr)){
+    install.packages("readr", dependencies = TRUE)
+    library(readr)
+}
+if(!require(tidyr)){
+    install.packages("tidyr", dependencies = TRUE)
+    library(tidyr)
+}
+if(!require(dplyr)){
+    install.packages("dplyr", dependencies = TRUE)
+    library(dplyr)
+}
+if(!require(ggplot2)){
+    install.packages("ggplot2", dependencies = TRUE)
+    library(ggplot2)
+}
+if(!require(broom)){
+    install.packages("broom", dependencies = TRUE)
+    library(broom)
+}
+if(!require(kableExtra)){
+    install.packages("kableExtra", dependencies = TRUE)
+    library(kableExtra)
+}
+if(!require(janitor)){
+    install.packages("janitor", dependencies = TRUE)
+    library(janitor)
+}
+```
+
+```{r setup, include=FALSE}
+#set global output chunk options
+knitr::opts_chunk$set(echo=TRUE, message=FALSE, warning=FALSE, collapse = F, highlight = T, results = "asis")
+#setting theme and centering the titles for ggplots
+theme_set(theme_classic())
+```
+
+```{r, echo=FALSE}
+# Import Data 
+hr_df_one <- read_csv("https://assets.datacamp.com/production/course_5977/datasets/hr_data.csv") 
+hr_df_two <- read_csv("https://assets.datacamp.com/production/course_5977/datasets/hr_data_2.csv") 
+survey_df_one <- read_csv("https://assets.datacamp.com/production/course_5977/datasets/survey_data.csv") 
+survey_df_two <- read_csv("https://assets.datacamp.com/production/course_5977/datasets/survey_data_2.csv") 
+recruitment <- read_csv("https://assets.datacamp.com/production/course_5977/datasets/recruitment_data.csv")
+pay <- read_csv("https://assets.datacamp.com/production/course_5977/datasets/fair_pay_data.csv") 
+performance <- read_csv("https://assets.datacamp.com/production/course_5977/datasets/performance_data.csv") 
+```
+
+```{r}
+#Merge Data Frames
+survey <- full_join(survey_df_one, survey_df_two, by = c("employee_id", "engagement"))
+hr <- full_join(hr_df_one, hr_df_two, by = "employee_id")
+joined_data <- left_join(hr, performance, by = "employee_id")
+```
+
+```{r, eval= FALSE}
+# get summary statistics of the data
+summary(survey)
+summary(hr)
+summary(pay)
+summary(joined_data)
+```
+
+---
+
+## Which recruiting source yields the best hires?
+
+```{r}
+# Found the average attrition for the sales team, by recruiting source, sorted from lowest attrition rate to highest
+avg_attrition <- recruitment %>%
+  filter(!is.na(recruiting_source)) %>% 
+  group_by(recruiting_source) %>% 
+  summarize(attrition_rate = mean(attrition)) %>% 
+  arrange()
+
+# Results table
+table <- recruitment %>%
+  filter(!is.na(recruiting_source)) %>% 
+  group_by("Recruiting Source" = recruiting_source) %>% 
+  summarize("Attrition Rate" = mean(attrition)) %>%
+  adorn_totals("row") %>% 
+  adorn_percentages(denominator = "col") %>%
+  adorn_pct_formatting() %>%
+  arrange(desc(`Attrition Rate`))
+
+kable(table, caption= "Average Attrition Rate for Sales Team by Recruiting Source") %>% kable_styling(full_width = T, bootstrap_options = c("striped", "responsive"), position = "left", fixed_thead = T) %>% row_spec(c(5), bold = T)
+```
+
+```{r}
+#Visualizing sales performance differences 
+avg_sales <- recruitment %>%
+  filter(!is.na(recruiting_source)) %>% 
+  group_by(recruiting_source) %>% 
+  summarize(avg_sales = mean(sales_quota_pct)) 
+
+
+ggplot(avg_sales, aes(recruiting_source, avg_sales)) + geom_col(aes(x = reorder(recruiting_source, avg_sales)), fill = "black") + labs(x = "Recruiting Source", y = "Average Sales", title = "Average Sales Rate by Recruiting Source")
+
+```
+
+```{r}
+# Visualizing Attrition Rates 
+avg_attrition %>%
+ggplot(aes(recruiting_source, attrition_rate )) + geom_col(aes(x = reorder(recruiting_source, attrition_rate)), fill = "black") + labs(x = "Recruiting Source", y = "Attrition Rate", title = "Average Attrition Rate by Recruiting Source") + scale_y_continuous(labels=scales::percent)
+```
+
+---
+
+## What is driving low employee engagement?
+
+### Which Department has the lowest engagement?
+```{r}
+# Output the average engagement score for each department, sorted
+table <- survey_df_one %>%
+  group_by("Department" = department) %>%
+  summarize(
+    "Min" = min(engagement),
+    "Median" = median(engagement),
+    "Mean" = mean(engagement),
+    "Max" = max(engagement)) %>%
+  arrange(desc(Mean))
+
+kable(table, caption= "Employee Engagement by Department") %>% kable_styling(full_width = T, bootstrap_options = c("striped", "responsive"), position = "left", fixed_thead = T)
+```
+
+```{r}
+#Comparing disengagment by department 
+survey_disengaged <- survey_df_one %>% 
+mutate(disengaged = ifelse(engagement <=2, 1, 0))
+
+# Summarize the three variables by department
+survey_summary <- survey_disengaged %>%
+group_by(department) %>%
+summarize(
+`percent disengaged` = mean(disengaged),
+`average salary` = mean(salary),
+`average vacation days` = mean(vacation_days_taken)) 
+
+
+table <- survey_disengaged %>%
+group_by("Department" = department) %>%
+summarize(
+"Percent Disengaged" = scales::percent(mean(disengaged), accuracy = .01),
+"Average Salary" = scales::dollar(mean(salary)),
+"Average Vacation Days" = mean(vacation_days_taken))
+
+kable(table, caption= "Disengagement by Department") %>% kable_styling(full_width = T, bootstrap_options = c("striped", "responsive"), position = "left", fixed_thead = T)
+```
+
+```{r}
+#Visualizing several variables
+# Gather data for plotting
+survey_gathered <- survey_summary %>% 
+  gather(key = "measure", value = "value",
+         `percent disengaged`, `average salary`, `average vacation days`) 
+
+# Created three bar charts
+ggplot(survey_gathered, aes(measure, value, fill = department)) +
+  geom_col(position = "dodge") + facet_wrap(~measure, scales = "free") +
+  theme(axis.title.x=element_blank(), 
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  scale_fill_manual(values = c("black", "darkred", "#1b9e77")) + labs(title = "Disengagement by Department", fill = "Department")
+```
+
+
+#### Are the engagement results statistically significant?
+```{r}
+#Checked the Statistical Significance of disengagement in sales department 
+
+# Adedd the in_sales variable
+survey_sales <- survey_disengaged %>%
+  mutate(in_sales = ifelse(department == "Sales", "Sales", "Other"))
+
+# Tested the hypothesis using survey_sales
+chisq.test(survey_sales$in_sales, survey_sales$disengaged) %>% tidy()
+```
+
+```{r}
+# Tested the hypothesis using the survey_sales data
+t.test(vacation_days_taken ~ in_sales ,data = survey_sales) %>% tidy()
+```
+
+---
+
+## Are new employees earning more than current employees?
+
+```{r}
+t.test(salary ~ new_hire, data = pay) %>% 
+  tidy()
+```
+
+```{r}
+# Create a proportion filled stacked bar chart
+ggplot(pay, aes(x = new_hire, fill = job_level)) + geom_bar(position = "fill") + scale_fill_manual(values = c("black", "darkred", "#1b9e77")) + labs(x = "New Hire", fill = "Job Level") + scale_y_continuous(labels=scales::percent) + labs(y = "Percent")
+```
+
+```{r}
+# Calculated the average salary for each group of interest in the pay dataset
+pay_grouped <- pay %>% group_by(new_hire, job_level) %>%
+summarize(avg_salary = mean(salary))
+
+# Visualization of the results
+pay_grouped %>%
+  ggplot(aes(new_hire, avg_salary)) + geom_col(aes(fill = job_level)) + facet_wrap(~job_level) + scale_fill_manual(values = c("black", "darkred", "#1b9e77")) + theme(legend.position = "none") + labs(x = "New Hire", y = "Average Salary", title = "New Hire's Average Salary by Job Level") + scale_y_continuous(labels=scales::dollar)
+```
+
+## Are new hourly employees getting paid more (statistically speaking)?
+
+
+According to this test, there is not a statistically significant difference in pay for new hourly employees versus current hourly employees. 
+```{r}
+# Filtering the data to include only hourly employees
+pay_filter <- pay %>% 
+filter(job_level == "Hourly")
+
+# Testing the difference in pay
+t.test(salary ~ new_hire, data = pay_filter) %>%
+tidy()
+```
+
+### Multiple Linear regression 
+
+Here I use a multiple linear regression to test the difference in pay between new hires and current employees. The power of linear regression is that it can combine rigorous analysis to test the difference between groups with adding a filter (controlling for certain variables), and test again. By adding the additional variable directly into the regression, I get a significance result that takes additional information/variables into account.
+```{r}
+# Ran a multiple regression (controlling for job level)
+model_multiple <- lm(salary ~ new_hire + job_level, data = pay)
+
+# Tidy results
+model_multiple %>% 
+  tidy()
+```
+According to this model, new hires are not paid significantly more than current employees when accounting for job level. However, when controlling for job level, they are paid more. 
+
+```{r}
+
+ # Pay equity by gender
+pay_equity <- full_join(pay, hr, by = c("employee_id", "job_level", "department"))
+
+lm(salary ~ new_hire + job_level + as.factor(gender), data = pay_equity) %>% 
+  tidy()
+```
+
+---
+
+## Are performance ratings being given fairly?
+
+```{r}
+# Checking whether the average performance rating differs by gender 
+table <- joined_data %>%
+group_by("Gender" = gender) %>%
+summarise("Average Performance Rating" = mean(rating))
+
+
+kable(table, caption= "Average Performance Rating by Gender") %>% kable_styling(full_width = F, bootstrap_options = c("striped", "responsive"), position = "left", fixed_thead = T) 
+```
+
+```{r}
+# Added the high_performer column, I created a "high performer" value indicating anyone who was rated a 4 or higher
+performance <- joined_data %>%  
+  mutate(high_performer = ifelse(rating >= 4, 1, 0))
+
+# Testing whether one gender is more likely to be a high performer
+chisq.test(performance$gender, performance$high_performer) %>% 
+  tidy()
+```
+
+```{r}
+# A visualization of the distribution of high_performer by gender
+performance %>%
+ggplot(aes(gender, fill = factor(rating))) + geom_bar(position = "dodge") + scale_fill_manual(values = c("#1b9e77","#d95f02","#7570b3","#e7298a","#66a61e")) + labs(title = "Distribution of Performance Rating by Gender", x = "Gender", fill = "Rating")
+```
+
+```{r}
+# A visualization of the distribution of job_level by gender
+performance %>%
+  ggplot(aes(x = gender, fill = job_level)) +
+  geom_bar(position = "fill") + scale_fill_manual(values = c("black", "darkred", "#1b9e77")) + scale_y_continuous(labels=scales::percent) + labs(title = "Distribution of Job Level by Gender", fill = "Job Level", x = "Gender", y= "Percent")
+
+
+# Testing whether men and women have different job level distributions
+chisq.test(performance$gender, performance$job_level) %>% tidy()
+```
+
+### Logistic Regression 
+
+```{r}
+# Run a simple logistic regression
+logistic_simple <- glm(high_performer ~ gender, family = "binomial", data = performance) 
+
+# Tidy results
+logistic_simple %>%
+  tidy()
+```
+
+```{r}
+#Performance ratings: accounting for job levels 
+
+# Multiple logistic regression
+logistic_multiple <- glm(high_performer ~ gender + job_level, family = "binomial", data = performance)
+
+# Tidy results
+logistic_multiple %>%
+  tidy()
+```
+
+
+
+
+
+
+
