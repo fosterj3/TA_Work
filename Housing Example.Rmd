@@ -1,0 +1,80 @@
+---
+title: "Housing Example"
+author: "Lamar Foster"
+date: "3/8/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#used to clear the environment
+rm(list = ls())
+```
+
+```{r}
+library(readr) #used to read in the data and change class of variables (numeric, character, etc) 
+library(dplyr) #used to manipulate the data (add new variables to the dataframe and use if_else statement)
+library(broom) #used to create a clean regression table
+library(janitor) #used to clean the data, make the variable names lowercase and snakecase
+library(corrplot) #used to create a correlation plot
+library(ggplot2) #used to graph the data, scatterplot
+
+```
+
+```{r}
+#read in the data
+seattleuproj <- read_csv("~/Desktop/R Project Data.csv")
+```
+
+```{r}
+#Cleaning Data - change price to numeric and variables to snakecase/lowercase
+df_proj <- seattleuproj %>% 
+  clean_names() %>% 
+  mutate(asking_price = parse_number(asking_price))
+```
+
+
+```{r}
+#Make a scatterplot  
+df_proj %>% 
+ggplot(aes(x = house_ft_2, y= asking_price)) + geom_point()
+```
+
+```{r}
+#Descriptive Statistics 
+summary(df_proj) 
+```
+
+```{r}
+#Make a correlation matrix
+#corrplot(as.matrix(df_proj), is.corr = FALSE)
+
+cor(df_proj, method = "pearson", use = "complete.obs")
+```
+
+```{r}
+# Multiple Linear Regression Model 
+lm(asking_price ~ house_ft_2 + bedroom + age, data = df_proj) %>% 
+  tidy()
+
+lm(asking_price ~ house_ft_2 + bedroom + age, data = df_proj) %>% 
+  summary()
+```
+
+```{r}
+#Creating Dummy Variables 
+df_proj_dummy <- df_proj %>% 
+  mutate(dummy_ft2 = if_else(house_ft_2 > 1500, 1,0))
+```
+
+Notes: 
+- To download the packages, use the write the following code in the "console" of RStudio: 
+  install.packages("package_name")
+- 
+  
+
+
+
