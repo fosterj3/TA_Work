@@ -73,7 +73,10 @@ df_proj_dummy <- df_proj %>%
 Notes: 
 - To download the packages, use the write the following code in the "console" of RStudio: 
   install.packages("package_name")
-- 
+  
+- To view the entire dataframe in Rstudio, use the following code in the console:
+  View(dataframename)
+
   
 
 
